@@ -8,8 +8,7 @@ import requests
 import sys
 
 # =========================
-# 🔧 (Optional) CUSTOM TRANSFORMERS
-# Keep ONLY if your model was trained with them
+# 🔧 CUSTOM TRANSFORMERS
 # =========================
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.cluster import KMeans
@@ -35,7 +34,7 @@ def column_ratio(X):
 def ratio_name(transformer, feature_names_in):
     return ["ratio"]
 
-# Make sure joblib can find these if used in the pipeline
+# Make joblib recognize custom stuff
 sys.modules["__main__"].Cluster_similarity = Cluster_similarity
 sys.modules["__main__"].column_ratio = column_ratio
 sys.modules["__main__"].ratio_name = ratio_name
@@ -48,45 +47,38 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten later if you want
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # =========================
-# 📦 MODEL DOWNLOAD + LOAD
+# 📦 MODEL CONFIG
 # =========================
 
-# 👉 Your Hugging face!!!!!!
-MODEL_URL = https://huggingface.co/Chine234/california_housing_predictor/resolve/main/california_housing_predictor_model.pkl
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(BASE_DIR, "model.pkl")
+MODEL_URL = "https://huggingface.co/Chine234/california_housing_predictor/resolve/main/california_housing_predictor_model.pkl"
+MODEL_PATH = "model.pkl"
 
 model = None
 
 
 def download_model():
-    """Download model file if it doesn't exist."""
     if not os.path.exists(MODEL_PATH):
-        print("📥 Downloading model...")
-        try:
-            response = requests.get(MODEL_URL, stream=True, timeout=60)
-            response.raise_for_status()
+        print("📥 Downloading model from Hugging Face...")
 
-            with open(MODEL_PATH, "wb") as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
+        response = requests.get(MODEL_URL, stream=True)
+        response.raise_for_status()
 
-            print("✅ Model downloaded")
-        except Exception as e:
-            print("❌ Download failed:", str(e))
+        with open(MODEL_PATH, "wb") as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+
+        print("✅ Model downloaded")
 
 
 def load_model():
-    """Load model into memory."""
     global model
     try:
         download_model()
@@ -97,7 +89,7 @@ def load_model():
         model = None
 
 
-# Load at startup
+# Load model at startup
 load_model()
 
 
@@ -148,10 +140,10 @@ def predict(data: HousingData):
     }])
 
     try:
-        pred = model.predict(df)
+        prediction = model.predict(df)
 
         return {
-            "predictedValue": float(pred[0]),
+            "predictedValue": float(prediction[0]),
             "confidence": 0.95,
             "timestamp": pd.Timestamp.now().isoformat()
         }
