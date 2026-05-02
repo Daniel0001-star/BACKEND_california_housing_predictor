@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 import os
 import sys
-import requests
+import gdown
 
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.cluster import KMeans
@@ -60,7 +60,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://frontend-california-housing-predict.vercel.app"],  # ✅ no trailing slash
+    allow_origins=["https://frontend-california-housing-predict.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -71,7 +71,7 @@ app.add_middleware(
 # 📦 MODEL DOWNLOAD + LOAD
 # =========================
 
-MODEL_URL = "https://drive.google.com/uc?export=download&id=1xGpyvUo3WB48qCLi6byVEVLgayi4Y3Z2"
+MODEL_URL = "https://drive.google.com/file/d/1xGpyvUo3WB48qCLi6byVEVLgayi4Y3Z2/view?usp=sharing"
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "california_housing_predictor_model.pkl")
@@ -81,26 +81,8 @@ model = None
 
 def download_model():
     if not os.path.exists(MODEL_PATH):
-        print("📥 Downloading model...")
-        session = requests.Session()
-        response = session.get(MODEL_URL, stream=True)
-
-        # Handle Google Drive's virus scan warning for large files
-        token = None
-        for key, value in response.cookies.items():
-            if key.startswith("download_warning"):
-                token = value
-                break
-
-        if token:
-            print("🔑 Confirming large file download...")
-            response = session.get(MODEL_URL, params={"confirm": token}, stream=True)
-
-        with open(MODEL_PATH, "wb") as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                if chunk:
-                    f.write(chunk)
-
+        print("📥 Downloading model from Google Drive...")
+        gdown.download(MODEL_URL, MODEL_PATH, quiet=False, fuzzy=True)
         print("✅ Model downloaded successfully")
     else:
         print("📦 Model already exists, skipping download")
