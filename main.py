@@ -1,21 +1,19 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import joblib
 import pandas as pd
-import numpy as np
+import joblib
 import os
+import requests
 import sys
-import gdown
 
+# =========================
+# 🔧 (Optional) CUSTOM TRANSFORMERS
+# Keep ONLY if your model was trained with them
+# =========================
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.cluster import KMeans
 from sklearn.metrics.pairwise import rbf_kernel
-
-
-# =========================
-# 🔧 CUSTOM TRANSFORMERS
-# =========================
 
 class Cluster_similarity(BaseEstimator, TransformerMixin):
     def __init__(self, n_clusters=10, gamma=1.0, random_state=42):
@@ -31,64 +29,64 @@ class Cluster_similarity(BaseEstimator, TransformerMixin):
     def transform(self, X):
         return rbf_kernel(X, self.Kmeans_.cluster_centers_, gamma=self.gamma)
 
-    def get_feature_names_out(self, input_features=None):
-        return [f"cluster_{i}_similarity" for i in range(self.n_clusters)]
-
-
 def column_ratio(X):
     return X[:, [0]] / X[:, [1]]
-
 
 def ratio_name(transformer, feature_names_in):
     return ["ratio"]
 
-
-# =========================
-# ⚠️ CRITICAL FIX (DO NOT REMOVE)
-# =========================
-
+# Make sure joblib can find these if used in the pipeline
+sys.modules["__main__"].Cluster_similarity = Cluster_similarity
 sys.modules["__main__"].column_ratio = column_ratio
 sys.modules["__main__"].ratio_name = ratio_name
-sys.modules["__main__"].Cluster_similarity = Cluster_similarity
 
 
 # =========================
 # 🚀 FASTAPI SETUP
 # =========================
-
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://frontend-california-housing-predict.vercel.app"],
+    allow_origins=["*"],  # tighten later if you want
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
 # =========================
 # 📦 MODEL DOWNLOAD + LOAD
 # =========================
 
-MODEL_URL = "https://drive.google.com/file/d/1xGpyvUo3WB48qCLi6byVEVLgayi4Y3Z2/view?usp=sharing"
+# 👉 Your Google Drive direct-download link (already fixed)
+MODEL_URL = "https://drive.google.com/uc?export=download&id=1xGpyvUo3WB48qCLi6byVEVLgayi4Y3Z2"
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(BASE_DIR, "california_housing_predictor_model.pkl")
+MODEL_PATH = os.path.join(BASE_DIR, "model.pkl")
 
 model = None
 
 
 def download_model():
+    """Download model file if it doesn't exist."""
     if not os.path.exists(MODEL_PATH):
-        print("📥 Downloading model from Google Drive...")
-        gdown.download(MODEL_URL, MODEL_PATH, quiet=False, fuzzy=True)
-        print("✅ Model downloaded successfully")
-    else:
-        print("📦 Model already exists, skipping download")
+        print("📥 Downloading model...")
+        try:
+            response = requests.get(MODEL_URL, stream=True, timeout=60)
+            response.raise_for_status()
+
+            with open(MODEL_PATH, "wb") as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+
+            print("✅ Model downloaded")
+        except Exception as e:
+            print("❌ Download failed:", str(e))
 
 
 def load_model():
+    """Load model into memory."""
     global model
     try:
         download_model()
@@ -99,14 +97,13 @@ def load_model():
         model = None
 
 
-# Load model on startup
+# Load at startup
 load_model()
 
 
 # =========================
 # 📥 INPUT SCHEMA
 # =========================
-
 class HousingData(BaseModel):
     longitude: float
     latitude: float
@@ -120,7 +117,7 @@ class HousingData(BaseModel):
 
 
 # =========================
-# 🔮 PREDICTION ENDPOINT
+# 🏠 ROUTES
 # =========================
 
 @app.get("/")
@@ -128,8 +125,13 @@ def home():
     return {"message": "API is running 🚀"}
 
 
+@app.get("/health")
+def health():
+    return {"status": "ok", "model_loaded": model is not None}
+
+
 @app.post("/predict")
-async def predict(data: HousingData):
+def predict(data: HousingData):
     if model is None:
         return {"error": "Model not loaded"}
 
@@ -146,11 +148,13 @@ async def predict(data: HousingData):
     }])
 
     try:
-        prediction = model.predict(df)
+        pred = model.predict(df)
+
         return {
-            "predictedValue": float(prediction[0]),
+            "predictedValue": float(pred[0]),
             "confidence": 0.95,
             "timestamp": pd.Timestamp.now().isoformat()
         }
+
     except Exception as e:
         return {"error": str(e)}
