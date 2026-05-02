@@ -58,8 +58,8 @@ app.add_middleware(
 # 📦 MODEL DOWNLOAD + LOAD
 # =========================
 
-# 👉 Your Google Drive direct-download link (already fixed)
-MODEL_URL = "https://drive.google.com/uc?export=download&id=1xGpyvUo3WB48qCLi6byVEVLgayi4Y3Z2"
+# 👉 Your Hugging face!!!!!!
+MODEL_URL = https://huggingface.co/Chine234/california_housing_predictor/resolve/main/california_housing_predictor_model.pkl
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "model.pkl")
