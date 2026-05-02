@@ -60,7 +60,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://frontend-california-housing-predict.vercel.app/"],
+    allow_origins=["https://frontend-california-housing-predict.vercel.app"],  # ✅ no trailing slash
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -82,15 +82,28 @@ model = None
 def download_model():
     if not os.path.exists(MODEL_PATH):
         print("📥 Downloading model...")
+        session = requests.Session()
+        response = session.get(MODEL_URL, stream=True)
 
-        response = requests.get(MODEL_URL, stream=True)
+        # Handle Google Drive's virus scan warning for large files
+        token = None
+        for key, value in response.cookies.items():
+            if key.startswith("download_warning"):
+                token = value
+                break
+
+        if token:
+            print("🔑 Confirming large file download...")
+            response = session.get(MODEL_URL, params={"confirm": token}, stream=True)
 
         with open(MODEL_PATH, "wb") as f:
             for chunk in response.iter_content(chunk_size=8192):
                 if chunk:
                     f.write(chunk)
 
-        print("✅ Model downloaded")
+        print("✅ Model downloaded successfully")
+    else:
+        print("📦 Model already exists, skipping download")
 
 
 def load_model():
@@ -152,12 +165,10 @@ async def predict(data: HousingData):
 
     try:
         prediction = model.predict(df)
-
         return {
             "predictedValue": float(prediction[0]),
             "confidence": 0.95,
             "timestamp": pd.Timestamp.now().isoformat()
         }
-
     except Exception as e:
         return {"error": str(e)}
